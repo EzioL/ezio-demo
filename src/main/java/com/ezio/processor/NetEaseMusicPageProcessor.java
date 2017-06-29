@@ -54,8 +54,6 @@ public class NetEaseMusicPageProcessor implements PageProcessor {
 	// 初始地址, 褐言喜欢的音乐
 	public static final String START_URL = "http://music.163.com/playlist?id=148174530";
 	public static final int ONE_PAGE = 20;
-	// 加密使用到的文本
-	public static final String TEXT = "{\"username\": \"\", \"rememberLogin\": \"true\", \"password\": \"\"}";
 
 	private Site site = Site.me()
 			.setDomain("http://music.163.com")
@@ -122,22 +120,23 @@ public class NetEaseMusicPageProcessor implements PageProcessor {
 		return commentCount;
 	}
 
-	public static void main(String[] args) {
-		NetEaseMusicPipeline netEaseMusicPipeline = new NetEaseMusicPipeline();
-		Spider.create(new NetEaseMusicPageProcessor())
-				.addUrl(START_URL)
-				.addPipeline(netEaseMusicPipeline)
-				.run();
-		System.out.println("爬虫结束");
-	}
+//	public static void main(String[] args) {
+//		NetEaseMusicPipeline netEaseMusicPipeline = new NetEaseMusicPipeline();
+//		Spider.create(new NetEaseMusicPageProcessor())
+//				.addUrl(START_URL)
+//				.addPipeline(netEaseMusicPipeline)
+//				.run();
+//		System.out.println("爬虫结束");
+//	}
 
-	public void start(NetEaseMusicPageProcessor processor ,NetEaseMusicPipeline netEaseMusicPipeline) {
-
+	public void start(NetEaseMusicPageProcessor processor, NetEaseMusicPipeline netEaseMusicPipeline) {
+		long start = System.currentTimeMillis();
 		Spider.create(processor)
 				.addUrl(START_URL)
 				.addPipeline(netEaseMusicPipeline)
 				.run();
-		System.out.println("爬虫结束");
+		long end = System.currentTimeMillis();
+		System.out.println("爬虫结束,耗时--->" + parseMillisecone(end - start));
 
 	}
 
@@ -216,5 +215,43 @@ public class NetEaseMusicPageProcessor implements PageProcessor {
 		return secKey;
 	}
 
+	public static String parseMillisecone(long millisecond) {
+		String time = null;
+		try {
+			long yushu_day = millisecond % (1000 * 60 * 60 * 24);
+			long yushu_hour = (millisecond % (1000 * 60 * 60 * 24))
+					% (1000 * 60 * 60);
+			long yushu_minute = millisecond % (1000 * 60 * 60 * 24)
+					% (1000 * 60 * 60) % (1000 * 60);
+			@SuppressWarnings("unused")
+			long yushu_second = millisecond % (1000 * 60 * 60 * 24)
+					% (1000 * 60 * 60) % (1000 * 60) % 1000;
+			if (yushu_day == 0) {
+				return (millisecond / (1000 * 60 * 60 * 24)) + "天";
+			} else {
+				if (yushu_hour == 0) {
+					return (millisecond / (1000 * 60 * 60 * 24)) + "天"
+							+ (yushu_day / (1000 * 60 * 60)) + "时";
+				} else {
+					if (yushu_minute == 0) {
+						return (millisecond / (1000 * 60 * 60 * 24)) + "天"
+								+ (yushu_day / (1000 * 60 * 60)) + "时"
+								+ (yushu_hour / (1000 * 60)) + "分";
+					} else {
+						return (millisecond / (1000 * 60 * 60 * 24)) + "天"
+								+ (yushu_day / (1000 * 60 * 60)) + "时"
+								+ (yushu_hour / (1000 * 60)) + "分"
+								+ (yushu_minute / 1000) + "秒";
 
+					}
+
+				}
+
+			}
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return time;
+	}
 }
