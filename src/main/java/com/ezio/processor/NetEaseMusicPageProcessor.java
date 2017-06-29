@@ -1,13 +1,16 @@
 package com.ezio.processor;
 
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
@@ -32,7 +35,10 @@ import sun.misc.BASE64Encoder;
 import us.codecraft.webmagic.Page;
 import us.codecraft.webmagic.Site;
 import us.codecraft.webmagic.Spider;
+import us.codecraft.webmagic.downloader.HttpClientDownloader;
 import us.codecraft.webmagic.processor.PageProcessor;
+import us.codecraft.webmagic.proxy.Proxy;
+import us.codecraft.webmagic.proxy.SimpleProxyProvider;
 
 /**
  * Created by Ezio on 2017/6/27.
@@ -67,6 +73,8 @@ public class NetEaseMusicPageProcessor implements PageProcessor {
 	public Site getSite() {
 		return site;
 	}
+	@Autowired
+	MusicService mMusicService;
 
 	@Override
 	public void process(Page page) {
@@ -88,52 +96,66 @@ public class NetEaseMusicPageProcessor implements PageProcessor {
 			music.setAuthor(page.getHtml().xpath("//p[@class='des s-fc4']/span/a/text()").toString());
 			music.setAlbum(page.getHtml().xpath("//p[@class='des s-fc4']/a/text()").toString());
 			music.setURL(url);
-			page.putField("music", music);
+			//page.putField("music", music);
+			mMusicService.addMusic(music);
+
+
 		}
 	}
 
 	private int getComment(Page page, String songId, int offset) {
-		JSONObject jsonObject = JSON.parseObject(crawlAjaxUrl(songId, offset));
 		int commentCount;
-		commentCount = (Integer) JSONPath.eval(jsonObject, "$.total");
-		for (; offset < commentCount; offset = offset + ONE_PAGE) {
-			JSONObject obj = JSON.parseObject(crawlAjaxUrl(songId, offset));
-			List<String> contents = (List<String>) JSONPath.eval(obj, "$.comments.content");
-			List<Integer> likedCounts = (List<Integer>) JSONPath.eval(obj, "$.comments.likedCount");
-			List<String> nicknames = (List<String>) JSONPath.eval(obj, "$.comments.user.nickname");
-			for (int i = 0; i < contents.size(); i++) {
-				// 保存到数据库
-				Comment comment = new Comment();
-				comment.setSongId(songId);
-				comment.setContent(contents.get(i));
-				comment.setLikedCount(likedCounts.get(i));
-				comment.setNickname(nicknames.get(i));
+		String s = crawlAjaxUrl(songId, offset);
 
-				page.putField("comment", comment);
-			}
-			try {
-				Thread.sleep(1000);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
+		if (s.contains("503 Service Temporarily Unavailable")) {
+			commentCount = -1;
+		} else {
+			JSONObject jsonObject = JSON.parseObject(s);
+			commentCount = (Integer) JSONPath.eval(jsonObject, "$.total");
+			for (; offset < commentCount; offset = offset + ONE_PAGE) {
+				JSONObject obj = JSON.parseObject(crawlAjaxUrl(songId, offset));
+				List<String> contents = (List<String>) JSONPath.eval(obj, "$.comments.content");
+				List<Integer> likedCounts = (List<Integer>) JSONPath.eval(obj, "$.comments.likedCount");
+				List<String> nicknames = (List<String>) JSONPath.eval(obj, "$.comments.user.nickname");
+				List<Long> times = (List<Long>) JSONPath.eval(obj, "$.comments.time");
+				List<Comment> comments = new ArrayList<>();
+				for (int i = 0; i < contents.size(); i++) {
+					// 保存到数据库
+					Comment comment = new Comment();
+					comment.setSongId(songId);
+					comment.setContent(filterEmoji(contents.get(i)));
+					comment.setLikedCount(likedCounts.get(i));
+					comment.setNickname(nicknames.get(i));
+					comment.setTime(stampToDate(times.get(i)));
+					comments.add(comment);
+					//page.putField("comment", comment);
+				}
+				mMusicService.addComments(comments);
+				try {
+					Thread.sleep(1000);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
 			}
 		}
+
 		return commentCount;
 	}
 
-//	public static void main(String[] args) {
-//		NetEaseMusicPipeline netEaseMusicPipeline = new NetEaseMusicPipeline();
-//		Spider.create(new NetEaseMusicPageProcessor())
-//				.addUrl(START_URL)
-//				.addPipeline(netEaseMusicPipeline)
-//				.run();
-//		System.out.println("爬虫结束");
-//	}
 
 	public void start(NetEaseMusicPageProcessor processor, NetEaseMusicPipeline netEaseMusicPipeline) {
+
+		HttpClientDownloader httpClientDownloader = new HttpClientDownloader();
+		Proxy proxy1 = new Proxy("125.38.39.43", 9797);
+		Proxy proxy2 = new Proxy("127.0.0.1", 1080);
+
+		httpClientDownloader.setProxyProvider(SimpleProxyProvider.from(proxy2));
+
 		long start = System.currentTimeMillis();
 		Spider.create(processor)
 				.addUrl(START_URL)
 				.addPipeline(netEaseMusicPipeline)
+				//.setDownloader(httpClientDownloader)
 				.run();
 		long end = System.currentTimeMillis();
 		System.out.println("爬虫结束,耗时--->" + parseMillisecone(end - start));
@@ -144,9 +166,9 @@ public class NetEaseMusicPageProcessor implements PageProcessor {
 
 		CloseableHttpClient httpclient = HttpClients.createDefault();
 		CloseableHttpResponse response = null;
-		String first_param = "{rid:\"\", offset:\"offset_param\", total:\"true\", limit:\"limit_param\", csrf_token:\"\"}";
+		String first_param = "{rid:\"\", offset:\"offset_param\", total:\"true\", limit:\"20\", csrf_token:\"\"}";
 		first_param = first_param.replace("offset_param", offset + "");
-		first_param = first_param.replace("limit_param", ONE_PAGE + "");
+		//first_param = first_param.replace("limit_param", ONE_PAGE + "");
 		try {
 			// 参数加密
 			// 16位随机字符串，直接FFF
@@ -253,5 +275,30 @@ public class NetEaseMusicPageProcessor implements PageProcessor {
 			e.printStackTrace();
 		}
 		return time;
+	}
+
+	/*
+     * 将时间戳转换为时间
+     */
+	public static String stampToDate(long s){
+		String res;
+		SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		long lt = s;
+		Date date = new Date(lt);
+		res = simpleDateFormat.format(date);
+		return res;
+	}
+	/**
+	 * 将emoji表情替换成*
+	 *
+	 * @param source
+	 * @return 过滤后的字符串
+	 */
+	public static String filterEmoji(String source) {
+		if(StringUtils.isNotBlank(source)){
+			return source.replaceAll("[\\ud800\\udc00-\\udbff\\udfff\\ud800-\\udfff]", "*");
+		}else{
+			return source;
+		}
 	}
 }

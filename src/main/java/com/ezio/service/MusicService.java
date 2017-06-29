@@ -8,6 +8,8 @@ import com.ezio.entity.Music;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 /**
  * Created by Ezio on 2017/6/28.
  */
@@ -20,20 +22,24 @@ public class MusicService {
 
 	public void addMusic(Music music) {
 		//判断数据是否存在
-		if (mMusicDao.countBySongId(music.getSongId()) == 0) {
-			mMusicDao.save(music);
-		}
+//		if (mMusicDao.countBySongId(music.getSongId()) == 0) {
+//			mMusicDao.save(music);
+//		}
+		mMusicDao.save(music);
+
 	}
 
 	public void addComment(Comment comment) {
 		//判断数据是否存在
-		if (mCommentDao.countBySongId(comment.getSongId()) == 0) {
-			mCommentDao.save(comment);
-		}
+//		if (mCommentDao.countBySongId(comment.getSongId()) == 0) {
+//			mCommentDao.save(comment);
+//		}
+		mCommentDao.save(comment);
 	}
 
-	public void del() {
-		mCommentDao.deleteAll();
-		mMusicDao.deleteAll();
+
+
+	public void addComments(List<Comment> comments) {
+		mCommentDao.save(comments);
 	}
 }

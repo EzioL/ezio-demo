@@ -19,8 +19,9 @@ public class EzioDemoApplication {
 
 	@GetMapping("/")
 	public String index() {
-		mProcessor.start(mProcessor, mPipeline);
-		return "ing";
+		new Thread(() -> mProcessor.start(mProcessor, mPipeline)).start();
+
+		return "爬虫开启";
 	}
 
 	public static void main(String[] args) {

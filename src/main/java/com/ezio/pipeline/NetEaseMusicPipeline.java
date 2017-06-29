@@ -30,9 +30,6 @@ public class NetEaseMusicPipeline implements Pipeline {
 	@Override
 	public void process(ResultItems resultItems, Task task) {
 
-
-		System.out.println(mMusicDao == null);
-
 		for (Map.Entry<String, Object> entry : resultItems.getAll().entrySet()) {
 			if (entry.getKey().equals("music")) {
 				Music music = (Music) entry.getValue();

@@ -19,6 +19,7 @@ public class Comment {
 	private String	nickname;
 	private Integer	likedCount;
 	private String	content;
+	private String time;
 
 	public Integer getId() {
 		return id;
@@ -60,7 +61,7 @@ public class Comment {
 		this.time = time;
 	}
 
-	private String time;
+
 
 	public String getContent() {
 		return content;

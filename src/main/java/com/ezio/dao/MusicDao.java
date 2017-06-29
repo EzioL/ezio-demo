@@ -9,4 +9,5 @@ import com.ezio.entity.Music;
  */
 public interface MusicDao extends JpaRepository<Music, Integer> {
 	int countBySongId(String songId);
+
 }
