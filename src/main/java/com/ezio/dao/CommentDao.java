@@ -1,9 +1,8 @@
 package com.ezio.dao;
 
-import com.ezio.entity.Comment;
-import com.ezio.entity.Music;
-
 import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.ezio.entity.Comment;
 
 /**
  * Created by Ezio on 2017/6/28.

@@ -1,13 +1,12 @@
 package com.ezio.processor;
 
-import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.JSONObject;
-import com.alibaba.fastjson.JSONPath;
-import com.ezio.dao.MusicDao;
-import com.ezio.entity.Comment;
-import com.ezio.entity.Music;
-import com.ezio.pipeline.MyPipeline;
-import com.ezio.service.MusicService;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
@@ -21,13 +20,13 @@ import org.apache.http.util.EntityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-
-import javax.crypto.Cipher;
-import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
+import com.alibaba.fastjson.JSONPath;
+import com.ezio.entity.Comment;
+import com.ezio.entity.Music;
+import com.ezio.pipeline.NetEaseMusicPipeline;
+import com.ezio.service.MusicService;
 
 import sun.misc.BASE64Encoder;
 import us.codecraft.webmagic.Page;
@@ -41,21 +40,21 @@ import us.codecraft.webmagic.processor.PageProcessor;
 @Component
 public class NetEaseMusicPageProcessor implements PageProcessor {
 
-	//正则表达式\\. \\转义java中的\  \.转义正则中的.
+	// 正则表达式\\. \\转义java中的\ \.转义正则中的.
 
-	//主域名
+	// 主域名
 	public static final String BASE_URL = "http://music.163.com/";
 
-	//匹配专辑URL
+	// 匹配专辑URL
 	public static final String ALBUM_URL = "http://music\\.163\\.com/playlist\\?id=\\d+";
 
-	//匹配歌曲URL
+	// 匹配歌曲URL
 	public static final String MUSIC_URL = "http://music\\.163\\.com/song\\?id=\\d+";
 
-	//初始地址, 褐言喜欢的音乐
+	// 初始地址, 褐言喜欢的音乐
 	public static final String START_URL = "http://music.163.com/playlist?id=148174530";
-
-	//加密使用到的文本
+	public static final int ONE_PAGE = 20;
+	// 加密使用到的文本
 	public static final String TEXT = "{\"username\": \"\", \"rememberLogin\": \"true\", \"password\": \"\"}";
 
 	private Site site = Site.me()
@@ -66,11 +65,6 @@ public class NetEaseMusicPageProcessor implements PageProcessor {
 			.setTimeOut(30000)
 			.setUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_2) AppleWebKit/537.31 (KHTML, like Gecko) Chrome/26.0.1410.65 Safari/537.31");
 
-	@Autowired
-	private MusicService mMusicService;
-	@Autowired
-	private MusicDao mMusicDao;
-
 	@Override
 	public Site getSite() {
 		return site;
@@ -78,25 +72,18 @@ public class NetEaseMusicPageProcessor implements PageProcessor {
 
 	@Override
 	public void process(Page page) {
-		//根据URL判断页面类型
+		// 根据URL判断页面类型
 		if (page.getUrl().regex(ALBUM_URL).match()) {
 			System.out.println("歌曲总数----->" + page.getHtml().xpath("//span[@id='playlist-track-count']/text()").toString());
-			//爬取歌曲URl加入队列
+			// 爬取歌曲URl加入队列
 			page.addTargetRequests(page.getHtml().xpath("//div[@id=\"song-list-pre-cache\"]").links().regex(MUSIC_URL).all());
-
 		} else {
 			String url = page.getUrl().toString();
 			Music music = new Music();
-//			page.putField("title", page.getHtml().xpath("//em[@class='f-ff2']/text()"));
-//			page.putField("author", page.getHtml().xpath("//p[@class='des s-fc4']/span/a/text()"));
-//			page.putField("album", page.getHtml().xpath("//p[@class='des s-fc4']/a/text()"));
-//			page.putField("URL", url);
-			//单独对AJAX请求获取评论数, 使用JSON解析返回结果
+			// 单独对AJAX请求获取评论数, 使用JSON解析返回结果
 			String songId = url.substring(url.indexOf("id=") + 3);
-			int commentCount = getComment(page,songId, 0);
-			//page.putField("commentCount", getComment(songId, 0));
-			//page.putField("commentCount", JSONPath.eval(JSON.parse(crawlAjaxUrl(url.substring(url.indexOf("id=") + 3))), "$.total"));
-			//music 保存到数据库
+			int commentCount = getComment(page, songId, 0);
+			// music 保存到数据库
 			music.setSongId(songId);
 			music.setCommentCount(commentCount);
 			music.setTitle(page.getHtml().xpath("//em[@class='f-ff2']/text()").toString());
@@ -111,59 +98,62 @@ public class NetEaseMusicPageProcessor implements PageProcessor {
 		JSONObject jsonObject = JSON.parseObject(crawlAjaxUrl(songId, offset));
 		int commentCount;
 		commentCount = (Integer) JSONPath.eval(jsonObject, "$.total");
-		for (; offset < commentCount; offset = offset + 50) {
+		for (; offset < commentCount; offset = offset + ONE_PAGE) {
 			JSONObject obj = JSON.parseObject(crawlAjaxUrl(songId, offset));
 			List<String> contents = (List<String>) JSONPath.eval(obj, "$.comments.content");
 			List<Integer> likedCounts = (List<Integer>) JSONPath.eval(obj, "$.comments.likedCount");
 			List<String> nicknames = (List<String>) JSONPath.eval(obj, "$.comments.user.nickname");
-			//JSONPath.eval(jsonObject, "$.comments");
 			for (int i = 0; i < contents.size(); i++) {
-				//保存到数据库
+				// 保存到数据库
 				Comment comment = new Comment();
 				comment.setSongId(songId);
 				comment.setContent(contents.get(i));
 				comment.setLikedCount(likedCounts.get(i));
 				comment.setNickname(nicknames.get(i));
 
-				page.putField("comment",comment);
+				page.putField("comment", comment);
+			}
+			try {
+				Thread.sleep(1000);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
 			}
 		}
 		return commentCount;
 	}
 
 	public static void main(String[] args) {
-
+		NetEaseMusicPipeline netEaseMusicPipeline = new NetEaseMusicPipeline();
 		Spider.create(new NetEaseMusicPageProcessor())
-				//初始URL
 				.addUrl(START_URL)
-				.addPipeline(new MyPipeline())
-				.run();
-		System.out.println("爬虫结束");
-
-	}
-
-	public static void start() {
-		Spider.create(new NetEaseMusicPageProcessor())
-				//初始URL
-				.addUrl(START_URL)
-				.addPipeline(new MyPipeline())
+				.addPipeline(netEaseMusicPipeline)
 				.run();
 		System.out.println("爬虫结束");
 	}
 
+	public void start(NetEaseMusicPageProcessor processor ,NetEaseMusicPipeline netEaseMusicPipeline) {
+
+		Spider.create(processor)
+				.addUrl(START_URL)
+				.addPipeline(netEaseMusicPipeline)
+				.run();
+		System.out.println("爬虫结束");
+
+	}
 
 	private String crawlAjaxUrl(String songId, int offset) {
+
 		CloseableHttpClient httpclient = HttpClients.createDefault();
 		CloseableHttpResponse response = null;
-		String first_param = "{rid:\"\", offset:\"first_param\", total:\"true\", limit:\"50\", csrf_token:\"\"}";
-		first_param = first_param.replace("first_param", offset + "");
-
+		String first_param = "{rid:\"\", offset:\"offset_param\", total:\"true\", limit:\"limit_param\", csrf_token:\"\"}";
+		first_param = first_param.replace("offset_param", offset + "");
+		first_param = first_param.replace("limit_param", ONE_PAGE + "");
 		try {
-			//参数加密
-			//16位随机字符串，直接FFF
-			//String secKey = new BigInteger(100, new SecureRandom()).toString(32).substring(0, 16);
+			// 参数加密
+			// 16位随机字符串，直接FFF
+			// String secKey = new BigInteger(100, new SecureRandom()).toString(32).substring(0, 16);
 			String secKey = "FFFFFFFFFFFFFFFF";
-			//两遍ASE加密
+			// 两遍ASE加密
 			String encText = aesEncrypt(aesEncrypt(first_param, "0CoJUm6Qyw8W8jud"), secKey);
 			//
 			String encSecKey = rsaEncrypt();
@@ -214,7 +204,7 @@ public class NetEaseMusicPageProcessor implements PageProcessor {
 		byte[] raw = key.getBytes();
 		SecretKeySpec secretKeySpec = new SecretKeySpec(raw, "AES");
 		IvParameterSpec ivParameterSpec = new IvParameterSpec(iv.getBytes());
-		//使用CBC模式，需要一个向量vi，增加加密算法强度
+		// 使用CBC模式，需要一个向量vi，增加加密算法强度
 		cipher.init(Cipher.ENCRYPT_MODE, secretKeySpec, ivParameterSpec);
 		byte[] encrypted = cipher.doFinal(src.getBytes(encodingFormat));
 		return new BASE64Encoder().encode(encrypted);

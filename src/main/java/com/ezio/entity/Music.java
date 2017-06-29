@@ -1,24 +1,26 @@
 package com.ezio.entity;
 
-import javax.persistence.*;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Id;
+import javax.persistence.Table;
 
 /**
  * Created by Ezio on 2017/6/27.
  */
-
 @Entity
 @Table(name = "music")
 public class Music {
 
 	@Id
 	@GeneratedValue
-	private Integer id;
-	private String songId;
-	private String title;
-	private String author;
-	private String album;
-	private String URL;
-	private int commentCount;
+	private Integer	id;
+	private String	songId;
+	private String	title;
+	private String	author;
+	private String	album;
+	private String	URL;
+	private int		commentCount;
 
 	public String getSongId() {
 		return songId;
@@ -43,7 +45,6 @@ public class Music {
 	public void setId(Integer id) {
 		this.id = id;
 	}
-
 
 	public String getTitle() {
 		return title;

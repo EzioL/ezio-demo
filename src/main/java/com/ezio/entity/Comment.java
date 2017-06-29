@@ -11,15 +11,14 @@ import javax.persistence.Table;
 @Entity
 @Table(name = "comment")
 public class Comment {
+	
 	@Id
 	@GeneratedValue
-	private Integer id;
-	private String songId;
-	private String nickname;
-	private Integer likedCount;
-	private String content;
-
-
+	private Integer	id;
+	private String	songId;
+	private String	nickname;
+	private Integer	likedCount;
+	private String	content;
 
 	public Integer getId() {
 		return id;
